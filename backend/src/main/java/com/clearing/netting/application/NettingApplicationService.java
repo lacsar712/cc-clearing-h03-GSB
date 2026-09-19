@@ -107,13 +107,16 @@ public class NettingApplicationService {
             run = runRepository.save(run);
             return new NettingRunResult(run, positions, opens);
         } catch (DomainException ex) {
+            // 外层事务会随抛出的异常回滚，必须用独立事务提交 FAILED 状态，
+            // 否则批次在数据库里永远停留在 RUNNING，列表中找不到失败记录。
             run.markFailed(ex.getMessage());
-            runRepository.save(run);
+            statusService.saveInNewTx(run);
             throw ex;
         } catch (RuntimeException ex) {
-            run.markFailed(ex.getMessage() == null ? "unexpected error" : ex.getMessage());
-            runRepository.save(run);
-            throw new DomainException("NETTING_FAILED", ex.getMessage());
+            String reason = ex.getMessage() == null ? "unexpected error" : ex.getMessage();
+            run.markFailed(reason);
+            statusService.saveInNewTx(run);
+            throw new DomainException("NETTING_FAILED", reason);
         }
     }
 

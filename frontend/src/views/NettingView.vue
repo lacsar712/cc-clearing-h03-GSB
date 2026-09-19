@@ -49,7 +49,11 @@
         </el-table-column>
         <el-table-column prop="settleDate" label="交割日" width="120" />
         <el-table-column prop="currency" label="币种" width="90" />
-        <el-table-column prop="status" label="状态" width="120" />
+        <el-table-column prop="status" label="状态" width="120">
+          <template #default="{ row }">
+            <el-tag :type="statusType(row.status)">{{ row.status }}</el-tag>
+          </template>
+        </el-table-column>
         <el-table-column prop="failureReason" label="失败原因" min-width="180" />
       </el-table>
     </div>
@@ -73,6 +77,13 @@ const memberMap = ref({})
 
 function nameOf(id) {
   return memberMap.value[id] || ''
+}
+
+function statusType(s) {
+  if (s === 'COMPLETED') return 'success'
+  if (s === 'FAILED') return 'danger'
+  if (s === 'RUNNING') return 'warning'
+  return 'info'
 }
 
 async function loadRuns() {
