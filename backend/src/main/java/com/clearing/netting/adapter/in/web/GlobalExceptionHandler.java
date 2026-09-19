@@ -2,6 +2,7 @@ package com.clearing.netting.adapter.in.web;
 
 import com.clearing.netting.adapter.in.web.dto.ErrorResponse;
 import com.clearing.netting.domain.exception.DomainException;
+import com.clearing.netting.domain.exception.NettingRunFailedException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -17,6 +18,10 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(DomainException.class)
     public ResponseEntity<ErrorResponse> handleDomain(DomainException ex) {
         HttpStatus status = mapStatus(ex.getCode());
+        if (ex instanceof NettingRunFailedException failed) {
+            return ResponseEntity.status(status)
+                    .body(ErrorResponse.of(ex.getCode(), ex.getMessage(), List.of(), failed.getRunId()));
+        }
         return ResponseEntity.status(status).body(ErrorResponse.of(ex.getCode(), ex.getMessage()));
     }
 

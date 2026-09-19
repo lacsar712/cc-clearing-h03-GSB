@@ -1,6 +1,7 @@
 package com.clearing.netting.application;
 
 import com.clearing.netting.domain.exception.DomainException;
+import com.clearing.netting.domain.exception.NettingRunFailedException;
 import com.clearing.netting.domain.model.Member;
 import com.clearing.netting.domain.model.NetPosition;
 import com.clearing.netting.domain.model.NettingRun;
@@ -107,13 +108,16 @@ public class NettingApplicationService {
             run = runRepository.save(run);
             return new NettingRunResult(run, positions, opens);
         } catch (DomainException ex) {
+            // 主事务即将随异常回滚（义务/头寸改动一并撤销），FAILED 终态必须在独立事务中提交，
+            // 否则失败批次不会留下记录，列表与详情页都无法定位到它。
             run.markFailed(ex.getMessage());
-            runRepository.save(run);
-            throw ex;
+            statusService.saveInNewTx(run);
+            throw new NettingRunFailedException(run.getRunId(), ex.getCode(), ex.getMessage());
         } catch (RuntimeException ex) {
-            run.markFailed(ex.getMessage() == null ? "unexpected error" : ex.getMessage());
-            runRepository.save(run);
-            throw new DomainException("NETTING_FAILED", ex.getMessage());
+            String reason = ex.getMessage() == null ? "unexpected error" : ex.getMessage();
+            run.markFailed(reason);
+            statusService.saveInNewTx(run);
+            throw new NettingRunFailedException(run.getRunId(), "NETTING_FAILED", reason);
         }
     }
 

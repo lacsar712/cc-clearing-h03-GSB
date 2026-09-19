@@ -39,6 +39,21 @@
       </el-table>
     </div>
 
+    <el-alert
+      v-if="lastFailedRunId"
+      class="card-panel"
+      style="margin-top:16px"
+      type="error"
+      :closable="false"
+      show-icon
+      title="本次轧差失败，失败批次已保留"
+    >
+      <template #default>
+        批次状态为 FAILED，可在下方历史批次中查看，或
+        <router-link :to="`/netting-runs/${lastFailedRunId}`">直接打开失败批次详情</router-link>。
+      </template>
+    </el-alert>
+
     <div class="card-panel" style="margin-top:16px">
       <strong>历史批次</strong>
       <el-table :data="runs" v-loading="loading" stripe style="margin-top:12px">
@@ -49,7 +64,11 @@
         </el-table-column>
         <el-table-column prop="settleDate" label="交割日" width="120" />
         <el-table-column prop="currency" label="币种" width="90" />
-        <el-table-column prop="status" label="状态" width="120" />
+        <el-table-column prop="status" label="状态" width="120">
+          <template #default="{ row }">
+            <el-tag :type="statusType(row.status)">{{ row.status }}</el-tag>
+          </template>
+        </el-table-column>
         <el-table-column prop="failureReason" label="失败原因" min-width="180" />
       </el-table>
     </div>
@@ -70,6 +89,14 @@ const loading = ref(false)
 const result = ref(null)
 const runs = ref([])
 const memberMap = ref({})
+const lastFailedRunId = ref(null)
+
+function statusType(s) {
+  if (s === 'COMPLETED') return 'success'
+  if (s === 'FAILED') return 'danger'
+  if (s === 'RUNNING') return 'warning'
+  return 'info'
+}
 
 function nameOf(id) {
   return memberMap.value[id] || ''
@@ -94,11 +121,23 @@ async function execute() {
       currency: currency.value
     })
     result.value = data
+    lastFailedRunId.value = null
     ElMessage.success('轧差完成，守恒校验通过')
     await loadRuns()
   } catch (e) {
     result.value = null
     await loadRuns()
+    // 失败批次已由后端持久化，错误响应直接带回 runId；兼容无 runId 的情况再按条件兜底
+    const failedRunId = e.response?.data?.runId
+    lastFailedRunId.value =
+      failedRunId ||
+      runs.value.find(
+        (r) =>
+          r.status === 'FAILED' &&
+          r.settleDate === settleDate.value &&
+          r.currency === currency.value
+      )?.runId ||
+      null
   } finally {
     running.value = false
   }
